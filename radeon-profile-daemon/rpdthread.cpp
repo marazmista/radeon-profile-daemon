@@ -9,7 +9,6 @@ rpdThread::rpdThread() : QThread() {
     QLocalServer::removeServer(serverName);
     daemonServer = new QLocalServer(this);
     signalReceiver = new QLocalSocket(this);
-    dataSender = new QLocalSocket(this);
 
     daemonServer->listen(serverName);
     connect(daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
@@ -18,19 +17,17 @@ rpdThread::rpdThread() : QThread() {
 }
 
 void rpdThread::newConn() {
-    qDebug() << "conn";
     signalReceiver = daemonServer->nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
 
-    dataSender->connectToServer(serverGuiName,QLocalSocket::ReadWrite);
+    sharedMem.setKey("radeon-profile");
+    if (!sharedMem.isAttached())
+        sharedMem.attach();
 }
 
 void rpdThread::decodeSignal() {
     char signal[16] = {0};
     signalReceiver->read(signal,signalReceiver->bytesAvailable());
-
-    qDebug() <<signal;
-
     performTask(QString(signal));
 }
 
@@ -45,21 +42,23 @@ void rpdThread::decodeSignal() {
 //      0 - card index
 //      auto - power level
 void rpdThread::performTask(const QString &signal) {
-    if (signal[0] == '1') {
-        if (dataSender->state() == QLocalSocket::ConnectedState) {
-            QFile f("/sys/kernel/debug/dri/"+QString(signal[1])+"/radeon_pm_info");
-            qDebug() << "Sending";
-            QString data = "CD\n";
-            if (f.open(QIODevice::ReadOnly)) {
-                data += f.readAll();
-                qDebug() << data;
-                f.close();
-            } else
-                data = "Daemon can't read data.";
+     if (signal[0] == '1') {
+        QFile f("/sys/kernel/debug/dri/"+QString(signal[1])+"/radeon_pm_info");
+        QString data;
+        if (f.open(QIODevice::ReadOnly)) {
+            data += f.readAll();
+            f.close();
+        } else
+            data = "null";
 
-            dataSender->write(data.toAscii(),data.length());
+        if (sharedMem.isAttached()) {
+            sharedMem.lock();
+            char *to = (char*)sharedMem.data();
+            const char *text = data.toStdString().c_str();
+            memcpy(to, text, strlen(text)+1);
+            sharedMem.unlock();
         }
-    }  else if (signal[0] == '2') {
+    } else if (signal[0] == '2') {
         QString filePath = "/sys/class/drm/card"+QString(signal[1])+"/device/power_dpm_state";
         QString decodedSignal = QString(signal);
         decodedSignal.remove(0,2);

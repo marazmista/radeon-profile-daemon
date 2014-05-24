@@ -3,11 +3,11 @@
 
 /*
 * class for reading stuff about card and communicate with gui
-* Things going this way. Daemon runs and listens for connection to daemonServer.
-* If connnection is established, then dataSender socket tries to connect to gui server
-* to have place when it will send data abouts clocks. After connections are ok, it awaits
-* for signals from gui. When signal requesting stuff about clocks comes in, daemon reads the file
-* from debugfs and then sends it by dataSender socket which is connected to gui server
+* Things going this way. Daemon runs and listens for connection to daemonServer. 
+* If connnection is established, then daemon attach itself to sharedmemory where
+* it will put data about the clocks. After, it listens for signals. If signal requests
+* clocks data, it place the info in shared mem where gui can read from.
+* Shared mem block is owned and created by gui.
 * When signal is about changing profile or power level then daemon sets what gui wants
 * and that is it.
 */
@@ -18,9 +18,9 @@
 #include <QThread>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QSharedMemory>
 
-const QString serverName = "radeon-profile-daemon-server",
-    serverGuiName = "radeon-profile-gui-server";
+const QString serverName = "radeon-profile-daemon-server";
 
 class rpdThread : public QThread
 {
@@ -28,7 +28,6 @@ class rpdThread : public QThread
 public:
     explicit rpdThread();
     ~rpdThread() {
-        delete dataSender;
         delete signalReceiver;
         delete daemonServer;
     }
@@ -40,8 +39,9 @@ public slots:
     void decodeSignal();
 
 private:
-    QLocalSocket *dataSender,*signalReceiver;
+    QLocalSocket *signalReceiver;
     QLocalServer *daemonServer;
+    QSharedMemory sharedMem;
 
     void readData();
     void sendData(const QString);
