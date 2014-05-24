@@ -1,0 +1,11 @@
+[Unit]
+Description=radeon-profile daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/radeon-profile-daemon
+ExecStop=/usr/bin/killall radeon-profile-daemon
+ExecReload=/usr/bin/killall radeon-profile-daemon && /usr/bin/radeon-profile-daemon
+
+[Install]
+WantedBy=multi-user.target
