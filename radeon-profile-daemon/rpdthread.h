@@ -19,6 +19,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QSharedMemory>
+#include <QTimer>
 
 const QString serverName = "radeon-profile-daemon-server";
 
@@ -37,16 +38,22 @@ signals:
 public slots:
     void newConn();
     void decodeSignal();
+    void onTimer();
 
 private:
     QLocalSocket *signalReceiver;
     QLocalServer *daemonServer;
     QSharedMemory sharedMem;
+    QTimer *timer;
+
+    struct {
+        QString clocksDataPath, powerProfilePath, powerLevelPath;
+    } gpuDataPaths;
 
     void readData();
-    void sendData(const QString);
     void setNewValue(const QString &filePath, const QString &newValue);
     void performTask(const QString &signal);
+    void figureOutGpuDataPaths(const QString &gpuIndex);
 };
 
 #endif // RPDTHREAD_H

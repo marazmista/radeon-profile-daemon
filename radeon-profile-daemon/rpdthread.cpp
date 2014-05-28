@@ -14,6 +14,9 @@ rpdThread::rpdThread() : QThread() {
     connect(daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
     qDebug() << "ok";
     QFile::setPermissions("/tmp/"+serverName,QFile("/tmp/"+serverName).permissions() | QFile::WriteOther | QFile::ReadOther);
+
+    timer = new QTimer();
+    connect(timer,SIGNAL(timeout()),this,SLOT(onTimer()));
 }
 
 void rpdThread::newConn() {
@@ -21,8 +24,9 @@ void rpdThread::newConn() {
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
 
     sharedMem.setKey("radeon-profile");
-    if (!sharedMem.isAttached())
+    if (!sharedMem.isAttached()) {
         sharedMem.attach();
+    }
 }
 
 void rpdThread::decodeSignal() {
@@ -31,7 +35,13 @@ void rpdThread::decodeSignal() {
     performTask(QString(signal));
 }
 
+void rpdThread::onTimer() {
+    if (signalReceiver->state() == QLocalSocket::ConnectedState)
+        readData();
+}
+
 // the signal comes in and:
+// 0 - config (card index)
 // 1 - give me the clocks
 // 2 - set dmp profile. Example: "20battery" means:
 //      2 - signal type
@@ -41,34 +51,50 @@ void rpdThread::decodeSignal() {
 //      3 - signal type
 //      0 - card index
 //      auto - power level
+// 4 - start timer with given interval
+// 5 - stop timer
 void rpdThread::performTask(const QString &signal) {
-     if (signal[0] == '1') {
-        QFile f("/sys/kernel/debug/dri/"+QString(signal[1])+"/radeon_pm_info");
-        QString data;
-        if (f.open(QIODevice::ReadOnly)) {
-            data += f.readAll();
-            f.close();
-        } else
-            data = "null";
+    if (signal.isEmpty())
+        return;
 
-        if (sharedMem.isAttached()) {
-            sharedMem.lock();
-            char *to = (char*)sharedMem.data();
-            const char *text = data.toStdString().c_str();
-            memcpy(to, text, strlen(text)+1);
-            sharedMem.unlock();
-        }
+    if (signal[0] == '0') {
+        figureOutGpuDataPaths(QString(signal[1]));
+    } else if (signal[0] == '1') {
+        readData();
     } else if (signal[0] == '2') {
-        QString filePath = "/sys/class/drm/card"+QString(signal[1])+"/device/power_dpm_state";
         QString decodedSignal = QString(signal);
-        decodedSignal.remove(0,2);
-        setNewValue(filePath,decodedSignal);
+        decodedSignal.remove(0,1);
+        setNewValue(gpuDataPaths.powerProfilePath,decodedSignal);
     } else if (signal[0] == '3') {
-        QString filePath = "/sys/class/drm/card"+QString(signal[1])+"/device/power_dpm_force_performance_level";
         QString decodedSignal = QString(signal);
-        decodedSignal.remove(0,2);
-        setNewValue(filePath,decodedSignal);
+        decodedSignal.remove(0,1);
+        setNewValue(gpuDataPaths.powerLevelPath,decodedSignal);
+    } else if (signal[0] == '4') {
+        QString decodedSignal = QString(signal);
+        timer->setInterval(decodedSignal.remove(0,1).toInt() * 1000);
+        timer->start();
+    } else if (signal[0] == '5') {
+        timer->stop();
     }
+}
+
+void rpdThread::readData() {
+    if (!sharedMem.isAttached())
+        return;
+
+    QFile f(gpuDataPaths.clocksDataPath);
+    QString data;
+    if (f.open(QIODevice::ReadOnly)) {
+        data = f.readAll();
+        f.close();
+    } else
+        data = "null";
+
+    sharedMem.lock();
+    char *to = (char*)sharedMem.data();
+    const char *text = data.toStdString().c_str();
+    memcpy(to, text, strlen(text)+1);
+    sharedMem.unlock();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
@@ -78,4 +104,10 @@ void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
     stream << newValue + "\n";
     file.flush();
     file.close();
+}
+
+void rpdThread::figureOutGpuDataPaths(const QString &gpuIndex) {
+    gpuDataPaths.clocksDataPath = "/sys/kernel/debug/dri/"+gpuIndex+"/radeon_pm_info";
+    gpuDataPaths.powerLevelPath = "/sys/class/drm/card"+gpuIndex+"/device/power_dpm_force_performance_level";
+    gpuDataPaths.powerProfilePath = "/sys/class/drm/card"+gpuIndex+"/device/power_dpm_state";
 }
