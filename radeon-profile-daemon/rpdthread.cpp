@@ -31,13 +31,16 @@ void rpdThread::newConn() {
 
 void rpdThread::decodeSignal() {
     char signal[16] = {0};
+
     signalReceiver->read(signal,signalReceiver->bytesAvailable());
+//    qDebug() << signal;
     performTask(QString(signal));
 }
 
 void rpdThread::onTimer() {
-    if (signalReceiver->state() == QLocalSocket::ConnectedState)
+    if (signalReceiver->state() == QLocalSocket::ConnectedState) {
         readData();
+    }
 }
 
 // the signal comes in and:
@@ -58,7 +61,13 @@ void rpdThread::performTask(const QString &signal) {
         return;
 
     if (signal[0] == '0') {
-        figureOutGpuDataPaths(QString(signal[1]));
+        QString decodedSignal = QString(signal);
+        figureOutGpuDataPaths(decodedSignal.at(1));
+        if (decodedSignal.length() > 2 && decodedSignal.at(2) == '4') {
+            decodedSignal.remove(0,3);
+            timer->setInterval(decodedSignal.toInt() * 1000);
+            timer->start();
+        }
     } else if (signal[0] == '1') {
         readData();
     } else if (signal[0] == '2') {
@@ -76,6 +85,7 @@ void rpdThread::performTask(const QString &signal) {
     } else if (signal[0] == '5') {
         timer->stop();
     }
+    readData();
 }
 
 void rpdThread::readData() {
