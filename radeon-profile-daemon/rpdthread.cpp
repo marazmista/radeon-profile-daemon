@@ -132,6 +132,10 @@ void rpdThread::readData() {
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
+    // limit potetntial vulnerability of writing files as root system wide
+    if (!filePath.contains("/sys/class/drm/"))
+        return;
+
     QFile file(filePath);
     file.open(QIODevice::WriteOnly | QIODevice::Text);
     QTextStream stream(&file);
