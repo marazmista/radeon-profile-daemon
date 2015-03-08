@@ -39,16 +39,15 @@ public slots:
     void newConn();
     void decodeSignal();
     void onTimer();
+    void disconnected();
 
 private:
     QLocalSocket *signalReceiver;
     QLocalServer *daemonServer;
     QSharedMemory sharedMem;
     QTimer *timer;
+    QString clocksDataPath;
 
-    struct {
-        QString clocksDataPath, powerProfilePath, powerLevelPath;
-    } gpuDataPaths;
 
     void readData();
     void setNewValue(const QString &filePath, const QString &newValue);

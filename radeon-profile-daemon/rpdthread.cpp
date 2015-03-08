@@ -4,6 +4,8 @@
 #include "rpdthread.h"
 #include <QFile>
 #include <QDebug>
+#include <QStringList>
+#include <QProcess>
 
 rpdThread::rpdThread() : QThread() {
     QLocalServer::removeServer(serverName);
@@ -22,67 +24,86 @@ rpdThread::rpdThread() : QThread() {
 void rpdThread::newConn() {
     signalReceiver = daemonServer->nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
+    connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
 
     sharedMem.setKey("radeon-profile");
     if (!sharedMem.isAttached()) {
-        sharedMem.attach();
+        if (!sharedMem.attach()) {
+            qDebug() << sharedMem.errorString();
+            return;
+        }
+        qDebug() << "connection";
+
+        readData();
     }
 }
 
+void rpdThread::disconnected() {
+    qDebug() << "disconnect";
+//    sharedMem.detach();
+}
+
+
 void rpdThread::decodeSignal() {
-    char signal[16] = {0};
+    char signal[256] = {0};
 
     signalReceiver->read(signal,signalReceiver->bytesAvailable());
-//    qDebug() << signal;
+    qDebug() << signal;
     performTask(QString(signal));
 }
 
 void rpdThread::onTimer() {
     if (signalReceiver->state() == QLocalSocket::ConnectedState) {
         readData();
-    }
+   }
 }
 
 // the signal comes in and:
 // 0 - config (card index)
 // 1 - give me the clocks
-// 2 - set dmp profile. Example: "20battery" means:
-//      2 - signal type
-//      0 - card index
-//      battery - profile
-// 3 - force power level. Example: "30auto" means:
-//      3 - signal type
-//      0 - card index
-//      auto - power level
+// 2 - set value to specified file
+//    signal type + new value + # + file path
+//
 // 4 - start timer with given interval
 // 5 - stop timer
 void rpdThread::performTask(const QString &signal) {
     if (signal.isEmpty())
         return;
 
-    if (signal[0] == '0') {
-        QString decodedSignal = QString(signal);
-        figureOutGpuDataPaths(decodedSignal.at(1));
-        if (decodedSignal.length() > 2 && decodedSignal.at(2) == '4') {
-            decodedSignal.remove(0,3);
-            timer->setInterval(decodedSignal.toInt() * 1000);
-            timer->start();
-        }
-    } else if (signal[0] == '1') {
+    QString decodedSignal = QString(signal);
+
+    switch (decodedSignal[0].toAscii()) {
+    case '0': {
+
+        QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
+        clocksDataPath = s[1];
+
+        // if timer interval also comes in, configure it
+        if (s.count() > 2)
+            performTask(s[2]+s[3]);
+
+        break;
+    }
+    case '1':
         readData();
-    } else if (signal[0] == '2') {
-        QString decodedSignal = QString(signal);
-        decodedSignal.remove(0,1);
-        setNewValue(gpuDataPaths.powerProfilePath,decodedSignal);
-    } else if (signal[0] == '3') {
-        QString decodedSignal = QString(signal);
-        decodedSignal.remove(0,1);
-        setNewValue(gpuDataPaths.powerLevelPath,decodedSignal);
-    } else if (signal[0] == '4') {
-        QString decodedSignal = QString(signal);
+        break;
+    case '2': {
+        // when two singlans have been sent one after another instantly, they comes as one singal to daemon
+        // so this is handling such things. # and later split, and later dealing with it in while...
+        QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
+        int sIdx =0, // singal index
+                pIdx = 1; // path index
+        while (pIdx <= s.count()) {
+            setNewValue(s[pIdx],s[sIdx].remove(0,1));
+            sIdx = sIdx + 2, pIdx = pIdx + 2;
+        };
+        break;
+    }
+    case '4':
         timer->setInterval(decodedSignal.remove(0,1).toInt() * 1000);
         timer->start();
-    } else if (signal[0] == '5') {
+        break;
+    case '5':
         timer->stop();
     }
     readData();
@@ -92,19 +113,22 @@ void rpdThread::readData() {
     if (!sharedMem.isAttached())
         return;
 
-    QFile f(gpuDataPaths.clocksDataPath);
+    QFile f(clocksDataPath);
     QString data;
     if (f.open(QIODevice::ReadOnly)) {
         data = f.readAll();
         f.close();
     } else
         data = "null";
+   // qDebug() << data;
 
-    sharedMem.lock();
-    char *to = (char*)sharedMem.data();
-    const char *text = data.toStdString().c_str();
-    memcpy(to, text, strlen(text)+1);
-    sharedMem.unlock();
+    if (sharedMem.lock()) {
+        char *to = (char*)sharedMem.data();
+        const char *text = data.toStdString().c_str();
+        memcpy(to, text, strlen(text)+1);
+        sharedMem.unlock();
+    } else
+        qDebug() << sharedMem.errorString();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
@@ -117,7 +141,5 @@ void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
 }
 
 void rpdThread::figureOutGpuDataPaths(const QString &gpuIndex) {
-    gpuDataPaths.clocksDataPath = "/sys/kernel/debug/dri/"+gpuIndex+"/radeon_pm_info";
-    gpuDataPaths.powerLevelPath = "/sys/class/drm/card"+gpuIndex+"/device/power_dpm_force_performance_level";
-    gpuDataPaths.powerProfilePath = "/sys/class/drm/card"+gpuIndex+"/device/power_dpm_state";
+    clocksDataPath = "/sys/kernel/debug/dri/"+gpuIndex+"/radeon_pm_info";
 }
