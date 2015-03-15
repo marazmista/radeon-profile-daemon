@@ -74,9 +74,11 @@ void rpdThread::performTask(const QString &signal) {
 
     switch (decodedSignal[0].toAscii()) {
     case '0': {
-
         QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
         clocksDataPath = s[1];
+
+        if (QFile::exists(clocksDataPath))
+            system(QString("cp "+ clocksDataPath + " /tmp/").toStdString().c_str());
 
         // if timer interval also comes in, configure it
         if (s.count() > 2)
