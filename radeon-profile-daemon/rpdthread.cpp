@@ -72,7 +72,7 @@ void rpdThread::performTask(const QString &signal) {
 
     QString decodedSignal = QString(signal);
 
-    switch (decodedSignal[0].toAscii()) {
+    switch (decodedSignal[0].toLatin1()) {
     case '0': {
         QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
         clocksDataPath = s[1];
