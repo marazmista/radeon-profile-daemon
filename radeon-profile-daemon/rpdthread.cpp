@@ -8,6 +8,8 @@
 #include <QProcess>
 
 rpdThread::rpdThread() : QThread() {
+    qDebug() << "Starting in debug mode";
+
     QLocalServer::removeServer(serverName);
     daemonServer = new QLocalServer(this);
     signalReceiver = new QLocalSocket(this);
@@ -29,17 +31,15 @@ void rpdThread::newConn() {
     sharedMem.setKey("radeon-profile");
     if (!sharedMem.isAttached()) {
         if (!sharedMem.attach()) {
-            qDebug() << sharedMem.errorString();
+            qCritical() << sharedMem.errorString();
             return;
         }
         qDebug() << "connection";
-
-        readData();
     }
 }
 
 void rpdThread::disconnected() {
-    qDebug() << "disconnect";
+    qWarning() << "disconnect";
 //    sharedMem.detach();
 }
 
@@ -48,11 +48,12 @@ void rpdThread::decodeSignal() {
     char signal[256] = {0};
 
     signalReceiver->read(signal,signalReceiver->bytesAvailable());
-    qDebug() << signal;
+    qDebug() << "Received signal: " << signal;
     performTask(QString(signal));
 }
 
 void rpdThread::onTimer() {
+    qDebug() << "Tick";
     if (signalReceiver->state() == QLocalSocket::ConnectedState) {
         readData();
    }
@@ -68,69 +69,95 @@ void rpdThread::onTimer() {
 // 5 - stop timer
 void rpdThread::performTask(const QString &signal) {
     if (signal.isEmpty())
-        return;
+        qWarning() << "Received empty signal";
+    else{
+        QString decodedSignal = QString(signal);
 
-    QString decodedSignal = QString(signal);
+        switch (decodedSignal[0].toLatin1()) {
+        case SIGNAL_CONFIG: {
+            qDebug() << "Elaborating a CONFIG signal";
+            QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
+            int size=s.size();
+            if(size > 1){
+                clocksDataPath = s[1];
 
-    switch (decodedSignal[0].toLatin1()) {
-    case '0': {
-        QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
-        clocksDataPath = s[1];
+                qDebug() << "Copying " << clocksDataPath;
+                if (QFile::exists(clocksDataPath))
+                    system(QString("cp "+ clocksDataPath + " /tmp/").toStdString().c_str());
 
-        if (QFile::exists(clocksDataPath))
-            system(QString("cp "+ clocksDataPath + " /tmp/").toStdString().c_str());
-
-        // if timer interval also comes in, configure it
-        if (s.count() > 2)
-            performTask(s[2]+s[3]);
-
+                // if timer interval also comes in, configure it
+                if(size == 3)
+                    performTask(s[2]);
+                else if(size == 4)
+                    performTask(s[2]+s[3]);
+                else
+                    qCritical() << "Too much instructions in one signal";
+            }else{
+                qWarning() << "Received a malformed signal: " << signal;
+            }
+        }
         break;
-    }
-    case '1':
-        readData();
+        case SIGNAL_READ_CLOCKS:{
+            qDebug() << "Elaborating a READ_CLOCKS signal";
+            readData();
+        }
         break;
-    case '2': {
-        // when two singlans have been sent one after another instantly, they comes as one singal to daemon
-        // so this is handling such things. # and later split, and later dealing with it in while...
-        QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
-        int sIdx =0, // singal index
+        case SIGNAL_SET_VALUE: {
+            qDebug() << "Elaborating a SET_VALUE signal";
+            // when two singlans have been sent one after another instantly, they comes as one singal to daemon
+            // so this is handling such things. # and later split, and later dealing with it in while...
+            QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
+            int sIdx =0, // singal index
                 pIdx = 1; // path index
-        while (pIdx <= s.count()) {
-            setNewValue(s[pIdx],s[sIdx].remove(0,1));
-            sIdx = sIdx + 2, pIdx = pIdx + 2;
-        };
+            while (pIdx < s.count()) {
+                setNewValue(s[pIdx],s[sIdx].remove(0,1));
+                sIdx = sIdx + 2, pIdx = pIdx + 2;
+            };
+        }
         break;
-    }
-    case '4':
-        timer->setInterval(decodedSignal.remove(0,1).toInt() * 1000);
-        timer->start();
+        case SIGNAL_TIMER_ON:{            
+            qDebug() << "Elaborating a TIMER_ON signal";
+            timer->setInterval(decodedSignal.remove(0,1).toInt() * 1000);
+            timer->start();
+        }
         break;
-    case '5':
-        timer->stop();
+        case SIGNAL_TIMER_OFF:{            
+            qDebug() << "Elaborating a TIMER_OFF signal";
+            timer->stop();
+        }
+        break;
+        default:
+            qWarning() << "Unknown signal received";
+        }
     }
     readData();
 }
 
 void rpdThread::readData() {
-    if (!sharedMem.isAttached())
-        return;
+    if (sharedMem.isAttached()){
 
     QFile f(clocksDataPath);
     QString data;
+    qDebug() << "Opening file: " << clocksDataPath;
     if (f.open(QIODevice::ReadOnly)) {
         data = f.readAll();
         f.close();
-    } else
+    } else{
         data = "null";
-   // qDebug() << data;
+        qCritical() << "Unable to read file " << clocksDataPath;
+    }
+    qDebug() << "Writing into shared memory: " << data;
 
     if (sharedMem.lock()) {
         char *to = (char*)sharedMem.data();
-        const char *text = data.toStdString().c_str();
+        char *text = data.toLatin1().data();
         memcpy(to, text, strlen(text)+1);
         sharedMem.unlock();
+        qDebug() << "Written into shared memory: " << to;
     } else
-        qDebug() << sharedMem.errorString();
+        qCritical() << sharedMem.errorString();
+    }else
+        qCritical() << sharedMem.errorString();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {

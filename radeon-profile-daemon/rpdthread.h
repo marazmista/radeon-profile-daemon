@@ -21,6 +21,12 @@
 #include <QSharedMemory>
 #include <QTimer>
 
+#define SIGNAL_CONFIG '0'
+#define SIGNAL_READ_CLOCKS '1'
+#define SIGNAL_SET_VALUE '2'
+#define SIGNAL_TIMER_ON '4'
+#define SIGNAL_TIMER_OFF '5'
+
 const QString serverName = "radeon-profile-daemon-server";
 
 class rpdThread : public QThread
