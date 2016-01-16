@@ -86,12 +86,14 @@ void rpdThread::performTask(const QString &signal) {
                     system(QString("cp "+ clocksDataPath + " /tmp/").toStdString().c_str());
 
                 // if timer interval also comes in, configure it
-                if(size == 3)
-                    performTask(s[2]);
-                else if(size == 4)
-                    performTask(s[2]+s[3]);
-                else
-                    qCritical() << "Too much instructions in one signal";
+                if(size > 2){
+                    if(size == 3)
+                        performTask(s[2]);
+                    else if(size == 4)
+                        performTask(s[2]+s[3]);
+                    else
+                        qCritical() << "Too much instructions in one signal";
+                }
             }else{
                 qWarning() << "Received a malformed signal: " << signal;
             }
