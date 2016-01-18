@@ -37,6 +37,7 @@ public:
     ~rpdThread() {
         delete signalReceiver;
         delete daemonServer;
+        delete timer;
     }
 
 signals:

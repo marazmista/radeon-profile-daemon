@@ -25,24 +25,23 @@ rpdThread::rpdThread() : QThread() {
 }
 
 void rpdThread::newConn() {
+    qWarning() << "Connecting";
     signalReceiver = daemonServer->nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
 
     sharedMem.setKey("radeon-profile");
     if (!sharedMem.isAttached()) {
-        if (!sharedMem.attach()) {
-            qCritical() << sharedMem.errorString();
-            return;
-        }
-        qDebug() << "connection";
+        qDebug() << "Shared memory is not attached, trying to attach";
+        if (!sharedMem.attach())
+            qCritical() << "Unable to attach to shared memory:" << sharedMem.errorString();
     }
 }
 
 void rpdThread::disconnected() {
     qWarning() << "disconnect";
     timer->stop();
-//    sharedMem.detach();
+    sharedMem.detach();
 }
 
 
@@ -173,9 +172,9 @@ void rpdThread::readData() {
         memcpy(to, text, strlen(text)+1);
         sharedMem.unlock();
     } else
-        qCritical() << sharedMem.errorString();
+        qCritical() << "Can't lock shared memory" << sharedMem.errorString();
     }else
-        qCritical() << sharedMem.errorString();
+        qCritical() << "Shared memory is not attached: " << sharedMem.errorString();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
