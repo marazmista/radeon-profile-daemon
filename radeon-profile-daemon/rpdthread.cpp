@@ -41,7 +41,7 @@ void rpdThread::newConn() {
 void rpdThread::disconnected() {
     qWarning() << "disconnect";
     timer->stop();
-    sharedMem.detach();
+//    sharedMem.detach();
 }
 
 
