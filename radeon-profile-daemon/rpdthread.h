@@ -21,6 +21,7 @@
 #include <QSharedMemory>
 #include <QTimer>
 
+#define SEPARATOR '#'
 #define SIGNAL_CONFIG '0'
 #define SIGNAL_READ_CLOCKS '1'
 #define SIGNAL_SET_VALUE '2'

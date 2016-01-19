@@ -78,7 +78,7 @@ void rpdThread::performTask(const QString &signal) {
         switch (decodedSignal[0].toLatin1()) {
         case SIGNAL_CONFIG: {
             qDebug() << "Elaborating a CONFIG signal";
-            QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
+            QStringList s = decodedSignal.split(SEPARATOR,QString::SkipEmptyParts);
             int size=s.size();
             if(size > 1){
                 QString filePath=s[1]; // The file path is after the '#'
@@ -120,7 +120,7 @@ void rpdThread::performTask(const QString &signal) {
             qDebug() << "Elaborating a SET_VALUE signal";
             // when two singlans have been sent one after another instantly, they comes as one singal to daemon
             // so this is handling such things. # and later split, and later dealing with it in while...
-            QStringList s = decodedSignal.split("#",QString::SkipEmptyParts);
+            QStringList s = decodedSignal.split(SEPARATOR,QString::SkipEmptyParts);
             int sIdx =0, // singal index
                 pIdx = 1; // path index
             while (pIdx < s.count()) {
@@ -131,7 +131,7 @@ void rpdThread::performTask(const QString &signal) {
         break;
         case SIGNAL_TIMER_ON:{            
             qDebug() << "Elaborating a TIMER_ON signal";
-            QString input=decodedSignal.remove(0,1); // Seconds string
+            QString input=decodedSignal.remove(0,1).remove(SEPARATOR); // Seconds string
             int inputMillis=input.toInt(); // Seconds integer
             if(inputMillis > 0){ // If seconds have been parsed correctly and the value is valid
                 qDebug() << "Setting up timer with seconds interval: " << inputMillis;
