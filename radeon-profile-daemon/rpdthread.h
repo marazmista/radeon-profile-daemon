@@ -28,6 +28,8 @@
 #define SIGNAL_TIMER_ON '4'
 #define SIGNAL_TIMER_OFF '5'
 
+#define SHARED_MEM_SIZE 128 // When changing this, also change SHARED_MEM_SIZE in radeon-profile/dxorg.h
+
 const QString serverName = "radeon-profile-daemon-server";
 
 class rpdThread : public QThread

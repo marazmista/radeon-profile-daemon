@@ -25,7 +25,7 @@ rpdThread::rpdThread() : QThread() {
 }
 
 void rpdThread::newConn() {
-    qWarning() << "Connecting";
+    qWarning() << "Connecting to the client";
     signalReceiver = daemonServer->nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
@@ -39,7 +39,7 @@ void rpdThread::newConn() {
 }
 
 void rpdThread::disconnected() {
-    qWarning() << "disconnect";
+    qWarning() << "Disconnecting from the client";
     timer->stop();
 //    sharedMem.detach();
 }
@@ -73,121 +73,135 @@ void rpdThread::performTask(const QString &signal) {
     if (signal.isEmpty())
         qWarning() << "Received empty signal";
     else{
-        QString decodedSignal = QString(signal);
+        QStringList instructions = signal.split(SEPARATOR, QString::SkipEmptyParts);
+        int size = instructions.size();
+        for(int index = 0; index < size; index++){ // Cycle through instructions
+            switch (instructions[index][0].toLatin1()) { // Check the first char (instruction type)
 
-        switch (decodedSignal[0].toLatin1()) {
-        case SIGNAL_CONFIG: {
-            qDebug() << "Elaborating a CONFIG signal";
-            QStringList s = decodedSignal.split(SEPARATOR,QString::SkipEmptyParts);
-            int size=s.size();
-            if(size > 1){
-                QString filePath=s[1]; // The file path is after the '#'
-                if(filePath.startsWith("/sys/kernel/debug/") /* || filePath.startsWith(safe directory)*/){ // Security check to prevent exploiters from reading root files
-                    clocksDataPath=filePath;
+            case SIGNAL_CONFIG: { // SIGNAL_CONFIG + SEPARATOR + CLOCKS_PATH + SEPARATOR
+                qDebug() << "Elaborating a CONFIG signal";
+                if(index < (size - 1)){ // Another instruction (the new clocks file path) is available
+                    QString filePath = instructions[++index]; // The file path is after the separator
+                    if(filePath.startsWith("/sys/kernel/debug/dri/")){ // Security check to prevent exploiters from reading root files
+                        QFileInfo clocksFileInfo(filePath);
+                        if (clocksFileInfo.exists()){ // The indicated clocks file path exists
+                            if(clocksFileInfo.isFile()){ // The path is a file, not a directory
 
-                    if (QFile::exists(clocksDataPath)){
-                        QString destination="/tmp/" + QFileInfo(clocksDataPath).fileName(); // Example: /sys/kernel/debug/dri/0/radeon_pm_info -> /tmp/radeon_pm_info
-                        qDebug() << clocksDataPath << " will be copied into " << destination;
-                        QFile::remove(destination); // QFile::copy() can't overwrite files, this call cleans the path
-                        if( ! QFile::copy(clocksDataPath,destination) ) // If the copying process fails
-                            qWarning() << "Failed copying " << clocksDataPath << " to " << destination;
-                    }
+                                qDebug() << "The new clocks data path is " << filePath;
+                                clocksDataPath=filePath; // Remember the path for the next readings
 
-                    // if timer interval also comes in, configure it
-                    if(size > 2){
-                        qDebug() << "Found multiple instructions";
-                        if(size == 3)
-                            performTask(s[2]);
-                        else if(size == 4)
-                            performTask(s[2]+s[3]);
-                        else
-                            qCritical() << "Too much instructions in one signal";
-                    }
-                }else{
-                    qWarning() << "Invalid clocks data path: " << clocksDataPath;
-                }
-            }else{
-                qWarning() << "Received a malformed signal: " << signal;
+                                QString destination="/tmp/" + clocksFileInfo.fileName(); // Example: /sys/kernel/debug/dri/0/radeon_pm_info -> /tmp/radeon_pm_info
+                                qDebug() << clocksDataPath << " will be copied into " << destination;
+                                QFile::remove(destination); // QFile::copy() can't overwrite files, this call cleans the path
+                                if( ! QFile::copy(clocksDataPath,destination) ) // If the copying process fails
+                                    qCritical() << "Failed copying " << filePath;
+
+                            } else // If the path is a directory
+                                qCritical() << "Indicated clocks data path is not a valid file: " << filePath;
+                        } else // If the path does not exist
+                            qCritical() << "Indicated clocks data path does not exist: " << filePath;
+                    } else // If the path is not in whitelisted directories
+                        qCritical() << "Invalid clocks data path: " << filePath;
+                } else // If the clocks file path is not present
+                    qCritical() << "Received a CONFIG signal with no path: " << signal;
+            } break;
+
+
+            case SIGNAL_READ_CLOCKS:{ // SIGNAL_READ_CLOCKS + SEPARATOR
+                qDebug() << "Elaborating a READ_CLOCKS signal";
+                readData();
+            } break;
+
+
+            case SIGNAL_SET_VALUE: { // SIGNAL_SET_VALUE + SEPARATOR + VALUE + SEPARATOR + PATH + SEPARATOR
+                qDebug() << "Elaborating a SET_VALUE signal";
+                if(index < (size - 2)){
+                    const QString value=instructions[++index], path=instructions[++index];
+                    setNewValue(path, value);
+                } else // Value and/or path are not indicated
+                    qWarning() << "Received a SET_VALUE signal with no path: " << signal;
+            } break;
+
+
+            case SIGNAL_TIMER_ON:{ // SIGNAL_TIMER_ON + SEPARATOR + INTERVAL + SEPARATOR
+                qDebug() << "Elaborating a TIMER_ON signal";
+                if(index < (size - 1)){
+                    QString input=instructions[++index]; // Seconds string
+                    int inputMillis=input.toInt(); // Seconds integer
+                    if(inputMillis > 0){ // If seconds have been parsed correctly and the value is valid
+                        qDebug() << "Setting up timer with seconds interval: " << inputMillis;
+                        timer->start(inputMillis * 1000); // Config and start the timer
+                    } else
+                        qCritical() << "Invalid value TIMER_ON value: " << input;
+                } else
+                    qCritical() << "Received TIMER_ON signal with no interval: " << signal;
+            } break;
+
+
+            case SIGNAL_TIMER_OFF:{ // SIGNAL_TIMER_OFF + SEPARATOR
+                qDebug() << "Elaborating a TIMER_OFF signal";
+                timer->stop();
+            } break;
+
+
+            default:
+                qWarning() << "Unknown signal received: " << signal;
             }
-        }
-        break;
-        case SIGNAL_READ_CLOCKS:{
-            qDebug() << "Elaborating a READ_CLOCKS signal";
-            readData();
-        }
-        break;
-        case SIGNAL_SET_VALUE: {
-            qDebug() << "Elaborating a SET_VALUE signal";
-            // when two singlans have been sent one after another instantly, they comes as one singal to daemon
-            // so this is handling such things. # and later split, and later dealing with it in while...
-            QStringList s = decodedSignal.split(SEPARATOR,QString::SkipEmptyParts);
-            int sIdx =0, // singal index
-                pIdx = 1; // path index
-            while (pIdx < s.count()) {
-                setNewValue(s[pIdx],s[sIdx].remove(0,1));
-                sIdx = sIdx + 2, pIdx = pIdx + 2;
-            };
-        }
-        break;
-        case SIGNAL_TIMER_ON:{            
-            qDebug() << "Elaborating a TIMER_ON signal";
-            QString input=decodedSignal.remove(0,1).remove(SEPARATOR); // Seconds string
-            int inputMillis=input.toInt(); // Seconds integer
-            if(inputMillis > 0){ // If seconds have been parsed correctly and the value is valid
-                qDebug() << "Setting up timer with seconds interval: " << inputMillis;
-                timer->start(inputMillis * 1000); // Config and start the timer
-            } else
-                qWarning() << "Invalid value TIMER_ON value: " << input;
-        }
-        break;
-        case SIGNAL_TIMER_OFF:{            
-            qDebug() << "Elaborating a TIMER_OFF signal";
-            timer->stop();
-        }
-        break;
-        default:
-            qWarning() << "Unknown signal received";
         }
     }
 }
 
 void rpdThread::readData() {
-    if (sharedMem.isAttached()){
+    if (sharedMem.isAttached() || sharedMem.attach()){
 
-    QFile f(clocksDataPath);
-    QString data;
-    qDebug() << "Opening file: " << clocksDataPath;
-    if (f.open(QIODevice::ReadOnly)) {
-        data = f.readAll();
-        f.close();
-    } else{
-        data = "null";
-        qCritical() << "Unable to read file " << clocksDataPath;
-    }
+        QFile f(clocksDataPath);
+        QByteArray data;
+        if (f.open(QIODevice::ReadOnly)) {
+            qDebug() << "Reading file: " << clocksDataPath;
+            data = f.readAll();
+            f.close();
+            if(data.isEmpty())
+                qWarning() << "Unable to read file " << clocksDataPath;
+        } else
+            qWarning() << "Unable to open file " << clocksDataPath;
 
-    if (sharedMem.lock()) {
-        qDebug() << "Writing into shared memory: " << data;
-        char *to = (char*)sharedMem.data();
-        char *text = data.toLatin1().data();
-        memcpy(to, text, strlen(text)+1);
-        sharedMem.unlock();
+        if (sharedMem.lock()) {
+            char *to = (char*)sharedMem.data();
+            if(to != NULL)
+                memcpy(sharedMem.data(), data.constData(), SHARED_MEM_SIZE);
+            else
+                qWarning() << "Shared memory data pointer is invalid: " << sharedMem.errorString();
+            sharedMem.unlock();
+        } else
+            qWarning() << "Shared memory can't be locked, can't write data: " << sharedMem.errorString();
     } else
-        qCritical() << "Can't lock shared memory" << sharedMem.errorString();
-    }else
-        qCritical() << "Shared memory is not attached: " << sharedMem.errorString();
+        qWarning() << "Shared memory is not attached, can't write data: " << sharedMem.errorString();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
     // limit potetntial vulnerability of writing files as root system wide
-    if (!filePath.contains("/sys/class/drm/"))
-        return;
+    if (filePath.startsWith("/sys/class/drm/")){
+        QFileInfo fileInfo(filePath);
+        if (fileInfo.exists()){ // The indicated path exists
+            if(fileInfo.isFile()){ // The path is a file, not a directory
+                QFile file(filePath);
+                if(file.open(QIODevice::WriteOnly | QIODevice::Text)){ // If the file opens successfully
 
-    QFile file(filePath);
-    file.open(QIODevice::WriteOnly | QIODevice::Text);
-    QTextStream stream(&file);
-    stream << newValue + "\n";
-    file.flush();
-    file.close();
+                    qDebug() << newValue << " will be written into " << filePath;
+                    QTextStream stream(&file);
+                    stream << newValue + "\n";
+                    if(!file.flush()) // If writing down the changes fails
+                        qWarning() << "Failed writing in " << filePath;
+                    file.close();
+
+                } else // Failed to open the file
+                    qWarning() << "Failed to open " << filePath;
+            } else // The path is a directory
+                qWarning() << "Indicated path to be set is not a valid file: " << filePath;
+        } else // The path does not exist
+            qWarning() << "Indicated path to be set does not exist: " << filePath;
+    } else // The path is not in the whitelisted directories
+        qWarning() << "Invalid path to be set: " << filePath;
 }
 
 void rpdThread::figureOutGpuDataPaths(const QString &gpuIndex) {
