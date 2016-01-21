@@ -80,31 +80,56 @@ void rpdThread::performTask(const QString &signal) {
 
             case SIGNAL_CONFIG: { // SIGNAL_CONFIG + SEPARATOR + CLOCKS_PATH + SEPARATOR
                 qDebug() << "Elaborating a CONFIG signal";
-                if(index < (size - 1)){ // Another instruction (the new clocks file path) is available
-                    QString filePath = instructions[++index]; // The file path is after the separator
-                    if(filePath.startsWith("/sys/kernel/debug/dri/")){ // Security check to prevent exploiters from reading root files
-                        QFileInfo clocksFileInfo(filePath);
-                        if (clocksFileInfo.exists()){ // The indicated clocks file path exists
-                            if(clocksFileInfo.isFile()){ // The path is a file, not a directory
-
-                                qDebug() << "The new clocks data path is " << filePath;
-                                clocksDataPath=filePath; // Remember the path for the next readings
-
-                                QString destination="/tmp/" + clocksFileInfo.fileName(); // Example: /sys/kernel/debug/dri/0/radeon_pm_info -> /tmp/radeon_pm_info
-                                qDebug() << clocksDataPath << " will be copied into " << destination;
-                                QFile::remove(destination); // QFile::copy() can't overwrite files, this call cleans the path
-                                if( ! QFile::copy(clocksDataPath,destination) ) // If the copying process fails
-                                    qCritical() << "Failed copying " << filePath;
-
-                            } else // If the path is a directory
-                                qCritical() << "Indicated clocks data path is not a valid file: " << filePath;
-                        } else // If the path does not exist
-                            qCritical() << "Indicated clocks data path does not exist: " << filePath;
-                    } else // If the path is not in whitelisted directories
-                        qCritical() << "Invalid clocks data path: " << filePath;
-                } else // If the clocks file path is not present
+                if(index + 1 >= size){
+                    // No other instruction is available
+                    // The clocks file path is not present
                     qCritical() << "Received a CONFIG signal with no path: " << signal;
-            } break;
+                    break;
+                }
+
+                QString filePath = instructions[++index]; // The file path is after the separator
+                if( ! filePath.startsWith("/sys/kernel/debug/dri/")){
+                    // The file path is not in whitelisted directories
+                    // This is a security check to prevent exploiters from reading root files
+                    qCritical() << "Illegal clocks data path: " << filePath;
+                    break;
+                }
+
+                QFileInfo clocksFileInfo(filePath);
+                if ( ! clocksFileInfo.exists()){
+                    // The indicated clocks file path does not exist
+                    qCritical() << "Indicated clocks data path does not exist: " << filePath;
+                    break;
+                }
+
+                if( ! clocksFileInfo.isFile()){
+                    // The path is a directory, not a file
+                    qCritical() << "Indicated clocks data path is not a valid file: " << filePath;
+                    break;
+                }
+
+                qDebug() << "The new clocks data path is " << filePath;
+                clocksDataPath=filePath; // Remember the path for the next readings
+
+                // The clocks data file will be copied in /tmp/
+                // Let's calculate the destination file path
+                QString destination="/tmp/" + clocksFileInfo.fileName();
+                // Example: /sys/kernel/debug/dri/0/radeon_pm_info -> /tmp/radeon_pm_info
+                qDebug() << clocksDataPath << " will be copied into " << destination;
+
+                // We will use QFile::copy() to copy the file
+                // QFile::copy() can't overwrite files, if the destination path exists we must delete it
+                if(QFile(destination).exists() && ! QFile::remove(destination))
+                    // The removing process has failed
+                    // The copying process will probably fail, but we will try anyway
+                    qCritical() << "Failed removing " << destination;
+
+                if( ! QFile::copy(clocksDataPath,destination))
+                    // The copying process has failed
+                    qCritical() << "Failed copying " << clocksDataPath;
+
+                break;
+            }
 
 
             case SIGNAL_READ_CLOCKS:{ // SIGNAL_READ_CLOCKS + SEPARATOR
@@ -179,29 +204,48 @@ void rpdThread::readData() {
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
-    // limit potetntial vulnerability of writing files as root system wide
-    if (filePath.startsWith("/sys/class/drm/")){
-        QFileInfo fileInfo(filePath);
-        if (fileInfo.exists()){ // The indicated path exists
-            if(fileInfo.isFile()){ // The path is a file, not a directory
-                QFile file(filePath);
-                if(file.open(QIODevice::WriteOnly | QIODevice::Text)){ // If the file opens successfully
+    if(filePath.isEmpty()){
+        // The specified file path is invalid
+        qWarning() << "The file path indicated to be set is empty. Lost value: " << newValue;
+        return;
+    }
 
-                    qDebug() << newValue << " will be written into " << filePath;
-                    QTextStream stream(&file);
-                    stream << newValue + "\n";
-                    if(!file.flush()) // If writing down the changes fails
-                        qWarning() << "Failed writing in " << filePath;
-                    file.close();
+    if ( ! filePath.startsWith("/sys/class/drm/")){
+        // The file path is not in whitelisted directories
+        // This is a security check to prevent exploiters from writing files as root system wide
+        qWarning() << "Illegal path to be set: " << filePath;
+        return;
+    }
 
-                } else // Failed to open the file
-                    qWarning() << "Failed to open " << filePath;
-            } else // The path is a directory
-                qWarning() << "Indicated path to be set is not a valid file: " << filePath;
-        } else // The path does not exist
-            qWarning() << "Indicated path to be set does not exist: " << filePath;
-    } else // The path is not in the whitelisted directories
-        qWarning() << "Invalid path to be set: " << filePath;
+    QFileInfo fileInfo(filePath);
+    if ( ! fileInfo.exists()){
+        // The indicated path does not exist
+        qWarning() << "The ndicated path to be set does not exist: " << filePath;
+        return;
+    }
+
+    if( ! fileInfo.isFile()){
+        // The path is a directory, not a file
+       qWarning() << "Indicated path to be set is not a valid file: " << filePath;
+       return;
+    }
+
+    QFile file(filePath);
+    if( ! file.open(QIODevice::WriteOnly | QIODevice::Text)){
+        // If the file does not open successfully
+        qWarning() << "Failed to open the file to be set: " << filePath;
+        return;
+    }
+
+    qDebug() << newValue << " will be written into " << filePath;
+    QTextStream stream(&file);
+    stream << newValue + "\n";
+
+    if( ! file.flush())
+        // If writing down the changes fails
+        qWarning() << "Failed writing in " << filePath;
+
+    file.close();
 }
 
 void rpdThread::figureOutGpuDataPaths(const QString &gpuIndex) {
