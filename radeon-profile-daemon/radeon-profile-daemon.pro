@@ -16,9 +16,9 @@ CONFIG   -= app_bundle
 #   http://doc.qt.io/qt-5/qtglobal.html#QtMsgType-enum
 #   qDebug will work only when compiled for Debug
 #   QtWarning, QtCritical and QtFatal will work also on Release
-@
+
 CONFIG(release, debug|release):DEFINES += QT_NO_DEBUG_OUTPUT
-@
+
 
 TEMPLATE = app
 
