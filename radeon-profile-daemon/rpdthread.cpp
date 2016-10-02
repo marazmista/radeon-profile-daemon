@@ -47,13 +47,11 @@ void rpdThread::disconnected() {
 void rpdThread::decodeSignal() {
     char signal[256] = {0};
 
-    qDebug() << "Received signal, reading it";
     signalReceiver->read(signal,signalReceiver->bytesAvailable());
     performTask(QString(signal));
 }
 
 void rpdThread::onTimer() {
-    qDebug() << "Tick";
     if (signalReceiver->state() == QLocalSocket::ConnectedState) {
         readData();
     }
@@ -194,7 +192,7 @@ void rpdThread::readData() {
         if (sharedMem.lock()) {
             char *to = (char*)sharedMem.data();
             if (to != NULL)
-                memcpy(sharedMem.data(), data.constData(), SHARED_MEM_SIZE);
+                memcpy(sharedMem.data(), data.constData(), sharedMem.size());
             else
                 qWarning() << "Shared memory data pointer is invalid: " << sharedMem.errorString();
             sharedMem.unlock();
