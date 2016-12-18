@@ -40,6 +40,7 @@ public:
         delete signalReceiver;
         delete daemonServer;
         delete timer;
+        delete sharedMem;
     }
 
 signals:
@@ -53,7 +54,7 @@ public slots:
 private:
     QLocalSocket *signalReceiver;
     QLocalServer *daemonServer;
-    QSharedMemory sharedMem;
+    QSharedMemory *sharedMem;
     QTimer *timer;
     QString clocksDataPath;
 

@@ -14,6 +14,8 @@ rpdThread::rpdThread() : QThread() {
     QLocalServer::removeServer(serverName);
     daemonServer = new QLocalServer(this);
     signalReceiver = new QLocalSocket(this);
+    sharedMem = new QSharedMemory(this);
+
 
     daemonServer->listen(serverName);
     connect(daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
@@ -30,11 +32,11 @@ void rpdThread::newConn() {
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
 
-    sharedMem.setKey("radeon-profile");
-    if (!sharedMem.isAttached()) {
+    sharedMem->setKey("radeon-profile");
+    if (!sharedMem->isAttached()) {
         qDebug() << "Shared memory is not attached, trying to attach";
-        if (!sharedMem.attach())
-            qCritical() << "Unable to attach to shared memory:" << sharedMem.errorString();
+        if (!sharedMem->attach())
+            qCritical() << "Unable to attach to shared memory:" << sharedMem->errorString();
     }
 }
 
@@ -176,7 +178,7 @@ void rpdThread::performTask(const QString &signal) {
 }
 
 void rpdThread::readData() {
-    if (sharedMem.isAttached() || sharedMem.attach()) {
+    if (sharedMem->isAttached() || sharedMem->attach()) {
 
         QFile f(clocksDataPath);
         QByteArray data;
@@ -189,17 +191,17 @@ void rpdThread::readData() {
         } else
             qWarning() << "Unable to open file " << clocksDataPath;
 
-        if (sharedMem.lock()) {
-            char *to = (char*)sharedMem.data();
+        if (sharedMem->lock()) {
+            char *to = (char*)sharedMem->data();
             if (to != NULL)
-                memcpy(sharedMem.data(), data.constData(), sharedMem.size());
+                memcpy(sharedMem->data(), data.constData(), sharedMem->size());
             else
-                qWarning() << "Shared memory data pointer is invalid: " << sharedMem.errorString();
-            sharedMem.unlock();
+                qWarning() << "Shared memory data pointer is invalid: " << sharedMem->errorString();
+            sharedMem->unlock();
         } else
-            qWarning() << "Shared memory can't be locked, can't write data: " << sharedMem.errorString();
+            qWarning() << "Shared memory can't be locked, can't write data: " << sharedMem->errorString();
     } else
-        qWarning() << "Shared memory is not attached, can't write data: " << sharedMem.errorString();
+        qWarning() << "Shared memory is not attached, can't write data: " << sharedMem->errorString();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
