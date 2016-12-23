@@ -63,6 +63,7 @@ private:
     void setNewValue(const QString &filePath, const QString &newValue);
     void performTask(const QString &signal);
     void figureOutGpuDataPaths(const QString &gpuIndex);
+    bool configure(const QString &filePath);
 };
 
 #endif // RPDTHREAD_H
