@@ -6,10 +6,12 @@ Supprts opensource xf86-video-ati and  xf86-video-amdgpu drivers.
 
 Type:
 
-```git clone https://github.com/marazmista/radeon-profile-daemon.git &&
+```
+git clone https://github.com/marazmista/radeon-profile-daemon.git &&
 cd radeon-profile-daemon/radeon-profile-daemon
 qmake &&
-make``` 
+make
+``` 
 
 # systemd service
 
