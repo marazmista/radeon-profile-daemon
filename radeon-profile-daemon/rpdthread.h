@@ -27,6 +27,7 @@
 #define SIGNAL_SET_VALUE '2'
 #define SIGNAL_TIMER_ON '4'
 #define SIGNAL_TIMER_OFF '5'
+#define SIGNAL_DISABLE_SHARED_MEM '6'
 
 
 const QString serverName = "radeon-profile-daemon-server";
@@ -64,6 +65,7 @@ private:
     void performTask(const QString &signal);
     void figureOutGpuDataPaths(const QString &gpuIndex);
     bool configure(const QString &filePath);
+    void disableSharedMem(bool disable);
 };
 
 #endif // RPDTHREAD_H

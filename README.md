@@ -1,10 +1,15 @@
-System daemon for reading info about GPU clocks and volts and pass this data to [radeon-profile](https://github.com/marazmista/radeon-profile) so the GUI application can be run as normal user.
+System daemon for reading info about Radeon GPU clocks and volts as well as control card power profiles so the GUI [radeon-profile](https://github.com/marazmista/radeon-profile) application can be run as normal user.
 
-Supprts only open source xf86-video-ati driver.
+Supprts opensource xf86-video-ati and  xf86-video-amdgpu drivers.
 
 # Bulid
 
-Type: `qmake-qt4 && make` in source directory.
+Type:
+
+```git clone https://github.com/marazmista/radeon-profile-daemon.git &&
+cd radeon-profile-daemon/radeon-profile-daemon
+qmake &&
+make``` 
 
 # systemd service
 

@@ -31,13 +31,7 @@ void rpdThread::newConn() {
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
 
-    sharedMem->setKey("radeon-profile");
-    if (!sharedMem->isAttached()) {
-        qDebug() << "Shared memory is not attached, trying to attach";
 
-        if (!sharedMem->attach())
-            qCritical() << "Unable to attach to shared memory:" << sharedMem->errorString();
-    }
 }
 
 void rpdThread::disconnected() {
@@ -135,6 +129,12 @@ void rpdThread::performTask(const QString &signal) {
                 timer->stop();
                 break;
 
+            case SIGNAL_DISABLE_SHARED_MEM: {
+                qDebug() << "Disable shared memory signal";
+                QString disable = instructions[++index];
+                disableSharedMem(disable.toInt());
+                break;
+            }
             default:
                 qWarning() << "Unknown signal received: " << signal;
                 break;
@@ -262,4 +262,23 @@ void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
 
 void rpdThread::figureOutGpuDataPaths(const QString &gpuIndex) {
     clocksDataPath = "/sys/kernel/debug/dri/"+gpuIndex+"/radeon_pm_info";
+}
+
+void rpdThread::disableSharedMem(bool disable) {
+    if (disable) {
+        timer->stop();
+
+        if (sharedMem->isAttached())
+            sharedMem->detach();
+
+    } else {
+
+        sharedMem->setKey("radeon-profile");
+        if (!sharedMem->isAttached()) {
+            qDebug() << "Shared memory is not attached, trying to attach";
+
+            if (!sharedMem->attach())
+                qCritical() << "Unable to attach to shared memory:" << sharedMem->errorString();
+        }
+    }
 }
