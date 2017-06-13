@@ -2,6 +2,10 @@ System daemon for reading info about Radeon GPU clocks and volts as well as cont
 
 Supprts opensource xf86-video-ati and  xf86-video-amdgpu drivers.
 
+# Dependencies
+
+1. `qt5-base`
+
 # Bulid
 
 Type:
