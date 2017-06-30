@@ -82,6 +82,10 @@ void rpdThread::performTask(const QString &signal) {
 
                 // SIGNAL_CONFIG + SEPARATOR + CLOCKS_PATH + SEPARATOR
             case SIGNAL_CONFIG:
+                if (index >= (size - 1)) {
+                    qWarning() << "Received a CONFIG signal with no path: " << signal;
+                    break;
+                }
                 qDebug() << "Elaborating a CONFIG signal";
 
                 if (!configure(instructions[++index]))
@@ -97,11 +101,15 @@ void rpdThread::performTask(const QString &signal) {
 
                 // SIGNAL_SET_VALUE + SEPARATOR + VALUE + SEPARATOR + PATH + SEPARATOR
             case SIGNAL_SET_VALUE: {
-                qDebug() << "Elaborating a SET_VALUE signal";
-                if (index > (size - 1)) {
+                if (index == (size - 2)) {
                     qWarning() << "Received a SET_VALUE signal with no path: " << signal;
                     break;
                 }
+                if (index >= (size - 1)) {
+                    qWarning() << "Received a SET_VALUE signal with no value: " << signal;
+                    break;
+                }
+                qDebug() << "Elaborating a SET_VALUE signal";
 
                 const QString value = instructions[++index],
                         path = instructions[++index];
@@ -112,7 +120,12 @@ void rpdThread::performTask(const QString &signal) {
 
                 // SIGNAL_TIMER_ON + SEPARATOR + INTERVAL + SEPARATOR
             case SIGNAL_TIMER_ON: {
+                if (index >= (size - 1)) {
+                    qWarning() << "Received a TIMER_ON signal with no interval: " << signal;
+                    break;
+                }
                 qDebug() << "Elaborating a TIMER_ON signal";
+
                 int inputMillis = instructions[++index].toInt(); // Seconds integer
 
                 if (inputMillis < 1) {
@@ -131,12 +144,20 @@ void rpdThread::performTask(const QString &signal) {
                 timer->stop();
                 break;
 
+                // SIGNAL_SHAREDMEM_KEY + SEPARATOR + KEY + SEPARATOR
             case SIGNAL_SHAREDMEM_KEY: {
+                if (index >= (size - 1)) {
+                    qWarning() << "Received a SHAREDMEM_KEY signal with no key: " << signal;
+                    break;
+                }
+                qDebug() << "Elaborating a SHAREDMEM_KEY signal";
+
                 QString key = instructions[++index];
                 qDebug() << "Shared memory key: " << key;
                 configureSharedMem(key);
                 break;
             }
+
             default:
                 qWarning() << "Unknown signal received: " << signal;
                 break;
