@@ -76,10 +76,6 @@ void rpdThread::performTask(const QString &signal) {
 
     // Cycle through instructions
     for (int index = 0; index < size; index++) {
-        if(instructions[index].isEmpty()){
-            qWarning() << "Received empty instruction, skipping";
-            continue;
-        }
 
         // Check the first char (instruction type)
         switch (instructions[index][0].toLatin1()) {
@@ -148,6 +144,7 @@ void rpdThread::performTask(const QString &signal) {
                 timer->stop();
                 break;
 
+                // SIGNAL_SHAREDMEM_KEY + SEPARATOR + KEY + SEPARATOR
             case SIGNAL_SHAREDMEM_KEY: {
                 if (index >= (size - 1)) {
                     qWarning() << "Received a SHAREDMEM_KEY signal with no key: " << signal;
