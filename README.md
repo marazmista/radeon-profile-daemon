@@ -6,7 +6,7 @@ Supprts opensource xf86-video-ati and  xf86-video-amdgpu drivers.
 
 1. `qt5-base`
 
-# Bulid
+# Build
 
 Type:
 
