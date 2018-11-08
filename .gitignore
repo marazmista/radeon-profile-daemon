@@ -14,12 +14,14 @@
 
 /.qmake.cache
 /.qmake.stash
+radeon-profile-daemon/.qmake.stash
 *.pro.user
 *.pro.user.*
 *.qbs.user
 *.qbs.user.*
 *.moc
 moc_*.cpp
+moc_*.h
 qrc_*.cpp
 ui_*.h
 Makefile*
@@ -32,3 +34,6 @@ Makefile*
 #QtCtreator Qml
 *.qmlproject.user
 *.qmlproject.user.*
+
+# Binary
+radeon-profile-daemon/radeon-profile-daemon
