@@ -63,6 +63,7 @@ void rpdThread::onTimer() {
 //
 // 4 - start timer with given interval
 // 5 - stop timer
+// 6 - shared mem key
 void rpdThread::performTask(const QString &signal) {
     qDebug() << "Performing task: " << signal;
 
@@ -71,7 +72,9 @@ void rpdThread::performTask(const QString &signal) {
         return;
     }
 
-    QStringList instructions = signal.split(SEPARATOR, QString::SkipEmptyParts);
+    QStringList instructions = signal.split(SEPARATOR);
+    instructions.removeLast();
+
     int size = instructions.size();
 
     // Cycle through instructions
@@ -83,6 +86,11 @@ void rpdThread::performTask(const QString &signal) {
                 // SIGNAL_CONFIG + SEPARATOR + CLOCKS_PATH + SEPARATOR
             case SIGNAL_CONFIG:
                 qDebug() << "Elaborating a CONFIG signal";
+
+                if (!checkRequiredCommandLength(1, index, size)) {
+                    qCritical() << "Invalid command! (index out of bounds)";
+                    return;
+                }
 
                 if (!configure(instructions[++index]))
                     qWarning() << "Configuration failed.";
@@ -98,9 +106,10 @@ void rpdThread::performTask(const QString &signal) {
                 // SIGNAL_SET_VALUE + SEPARATOR + VALUE + SEPARATOR + PATH + SEPARATOR
             case SIGNAL_SET_VALUE: {
                 qDebug() << "Elaborating a SET_VALUE signal";
-                if (index > (size - 1)) {
-                    qWarning() << "Received a SET_VALUE signal with no path: " << signal;
-                    break;
+
+                if (!checkRequiredCommandLength(2, index, size)) {
+                    qCritical() << "Invalid command! (index out of bounds)";
+                    return;
                 }
 
                 const QString value = instructions[++index],
@@ -113,6 +122,12 @@ void rpdThread::performTask(const QString &signal) {
                 // SIGNAL_TIMER_ON + SEPARATOR + INTERVAL + SEPARATOR
             case SIGNAL_TIMER_ON: {
                 qDebug() << "Elaborating a TIMER_ON signal";
+
+                if (!checkRequiredCommandLength(1, index, size)) {
+                    qCritical() << "Invalid command! (index out of bounds)";
+                    return;
+                }
+
                 int inputMillis = instructions[++index].toInt(); // Seconds integer
 
                 if (inputMillis < 1) {
@@ -132,6 +147,12 @@ void rpdThread::performTask(const QString &signal) {
                 break;
 
             case SIGNAL_SHAREDMEM_KEY: {
+
+                if (!checkRequiredCommandLength(1, index, size)) {
+                    qCritical() << "Invalid command! (index out of bounds)";
+                    return;
+                }
+
                 QString key = instructions[++index];
                 qDebug() << "Shared memory key: " << key;
                 configureSharedMem(key);
@@ -143,6 +164,13 @@ void rpdThread::performTask(const QString &signal) {
         }
 
     }
+}
+
+bool rpdThread::checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size) {
+    if (size <= currentIndex + required)
+        return false;
+
+    return  true;
 }
 
 bool rpdThread::configure(const QString &filePath) {

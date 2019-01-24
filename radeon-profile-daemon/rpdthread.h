@@ -65,6 +65,7 @@ private:
     void performTask(const QString &signal);
     bool configure(const QString &filePath);
     void configureSharedMem(const QString &key);
+    bool checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size);
 };
 
 #endif // RPDTHREAD_H
