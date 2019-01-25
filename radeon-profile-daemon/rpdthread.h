@@ -37,12 +37,7 @@ class rpdThread : public QThread
     Q_OBJECT
 public:
     explicit rpdThread();
-    ~rpdThread() {
-        delete signalReceiver;
-        delete daemonServer;
-        delete timer;
-        delete sharedMem;
-    }
+    ~rpdThread() = default;
 
 signals:
 
@@ -53,10 +48,10 @@ public slots:
     void disconnected();
 
 private:
-    QLocalSocket *signalReceiver;
-    QLocalServer *daemonServer;
-    QSharedMemory *sharedMem;
-    QTimer *timer;
+    QLocalSocket *signalReceiver = nullptr;
+    QLocalServer daemonServer;
+    QSharedMemory sharedMem;
+    QTimer timer;
     QString clocksDataPath;
 
 

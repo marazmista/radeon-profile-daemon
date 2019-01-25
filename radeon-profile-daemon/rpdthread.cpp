@@ -12,34 +12,31 @@ rpdThread::rpdThread() : QThread() {
     qDebug() << "Starting in debug mode";
 
     QLocalServer::removeServer(serverName);
-    daemonServer = new QLocalServer(this);
-    signalReceiver = new QLocalSocket(this);
-    sharedMem = new QSharedMemory(this);
 
-    daemonServer->listen(serverName);
-    connect(daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
-    qDebug() << "ok";
+    daemonServer.listen(serverName);
+    connect(&daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
     QFile::setPermissions("/tmp/"+serverName,QFile("/tmp/"+serverName).permissions() | QFile::WriteOther | QFile::ReadOther);
 
-    timer = new QTimer(this); // Initialize the timer with this class as parent
-    connect(timer,SIGNAL(timeout()),this,SLOT(onTimer()));
+    qDebug() << "ok";
+
+    connect(&timer,SIGNAL(timeout()),this,SLOT(onTimer()));
 }
 
 void rpdThread::newConn() {
     qWarning() << "Connecting to the client";
-    signalReceiver = daemonServer->nextPendingConnection();
+    signalReceiver = daemonServer.nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
-
-
 }
 
 void rpdThread::disconnected() {
     qWarning() << "Disconnecting from the client";
-    timer->stop();
+    timer.stop();
 
-    if (sharedMem->isAttached())
-        sharedMem->detach();
+    if (sharedMem.isAttached())
+        sharedMem.detach();
+
+    signalReceiver->deleteLater();
 }
 
 
@@ -136,14 +133,14 @@ void rpdThread::performTask(const QString &signal) {
                 }
 
                 qDebug() << "Setting up timer with seconds interval: " << inputMillis;
-                timer->start(inputMillis * 1000); // Config and start the timer
+                timer.start(inputMillis * 1000); // Config and start the timer
                 break;
             }
 
                 // SIGNAL_TIMER_OFF + SEPARATOR
             case SIGNAL_TIMER_OFF:
                 qDebug() << "Elaborating a TIMER_OFF signal";
-                timer->stop();
+                timer.stop();
                 break;
 
             case SIGNAL_SHAREDMEM_KEY: {
@@ -208,8 +205,8 @@ bool rpdThread::configure(const QString &filePath) {
 }
 
 void rpdThread::readData() {
-    if (!sharedMem->isAttached() && !sharedMem->attach()) {
-        qWarning() << "Shared memory is not attached, can't write data: " << sharedMem->errorString();
+    if (!sharedMem.isAttached() && !sharedMem.attach()) {
+        qWarning() << "Shared memory is not attached, can't write data: " << sharedMem.errorString();
         return;
     }
 
@@ -229,20 +226,20 @@ void rpdThread::readData() {
         return;
     }
 
-    if (!sharedMem->lock()) {
-        qWarning() << "Shared memory can't be locked, can't write data: " << sharedMem->errorString();
+    if (!sharedMem.lock()) {
+        qWarning() << "Shared memory can't be locked, can't write data: " << sharedMem.errorString();
         return;
     }
 
-    char *to = (char*)sharedMem->data();
+    char *to = (char*)sharedMem.data();
     if (to == NULL) {
-        qWarning() << "Shared memory data pointer is invalid: " << sharedMem->errorString();
-        sharedMem->unlock();
+        qWarning() << "Shared memory data pointer is invalid: " << sharedMem.errorString();
+        sharedMem.unlock();
         return;
     }
 
-    memcpy(sharedMem->data(), data.constData(), sharedMem->size());
-    sharedMem->unlock();
+    memcpy(sharedMem.data(), data.constData(), sharedMem.size());
+    sharedMem.unlock();
 }
 
 void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
@@ -291,20 +288,13 @@ void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
 }
 
 void rpdThread::configureSharedMem(const QString &key) {
-    if (key == "_") {
-        timer->stop();
+    sharedMem.setKey(key);
 
-        if (sharedMem->isAttached())
-            sharedMem->detach();
+    if (!sharedMem.isAttached()) {
+        qDebug() << "Shared memory is not attached, trying to attach";
 
-    } else {
+        if (!sharedMem.attach())
+            qCritical() << "Unable to attach to shared memory:" << sharedMem.errorString();
 
-        sharedMem->setKey(key);
-        if (!sharedMem->isAttached()) {
-            qDebug() << "Shared memory is not attached, trying to attach";
-
-            if (!sharedMem->attach())
-                qCritical() << "Unable to attach to shared memory:" << sharedMem->errorString();
-        }
     }
 }
