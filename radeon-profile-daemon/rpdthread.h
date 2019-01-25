@@ -56,7 +56,7 @@ private:
 
 
     void readData();
-    void setNewValue(const QString &filePath, const QString &newValue);
+    bool setNewValue(const QString &filePath, const QString &newValue);
     void performTask(const QString &signal);
     bool configure(const QString &filePath);
     void configureSharedMem(const QString &key);

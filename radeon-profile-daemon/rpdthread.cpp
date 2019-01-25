@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QStringList>
 #include <QProcess>
+#include <QDataStream>
 
 rpdThread::rpdThread() : QThread() {
     qDebug() << "Starting in debug mode";
@@ -69,6 +70,9 @@ void rpdThread::performTask(const QString &signal) {
         return;
     }
 
+    bool setValueSucces = false;
+    QString confirmationMsg;
+
     QStringList instructions = signal.split(SEPARATOR);
     instructions.removeLast();
 
@@ -112,7 +116,11 @@ void rpdThread::performTask(const QString &signal) {
                 const QString value = instructions[++index],
                         path = instructions[++index];
 
-                setNewValue(path, value);
+                if (setNewValue(path, value)) {
+                        setValueSucces = true;
+                        confirmationMsg.append(value).append("#");
+                }
+
                 break;
             }
 
@@ -161,6 +169,16 @@ void rpdThread::performTask(const QString &signal) {
         }
 
     }
+
+    if (setValueSucces) {
+        QByteArray feedback;
+        QDataStream out(&feedback, QIODevice::WriteOnly);
+
+        out << confirmationMsg;
+
+        signalReceiver->write(feedback);
+    }
+
 }
 
 bool rpdThread::checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size) {
@@ -242,38 +260,38 @@ void rpdThread::readData() {
     sharedMem.unlock();
 }
 
-void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
+bool rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
     if (filePath.isEmpty()) {
         // The specified file path is invalid
         qWarning() << "The file path indicated to be set is empty. Lost value: " << newValue;
-        return;
+        return false;
     }
 
     if (!filePath.startsWith("/sys/class/drm/")) {
         // The file path is not in whitelisted directories
         // This is a security check to prevent exploiters from writing files as root system wide
         qWarning() << "Illegal path to be set: " << filePath;
-        return;
+        return false;
     }
 
     QFileInfo fileInfo(filePath);
     if (!fileInfo.exists()) {
         // The indicated path does not exist
         qWarning() << "The ndicated path to be set does not exist: " << filePath;
-        return;
+        return false;
     }
 
     if (!fileInfo.isFile()) {
         // The path is a directory, not a file
         qWarning() << "Indicated path to be set is not a valid file: " << filePath;
-        return;
+        return false;
     }
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         // If the file does not open successfully
         qWarning() << "Failed to open the file to be set: " << filePath;
-        return;
+        return false;
     }
 
     qDebug() << newValue << " will be written into " << filePath;
@@ -285,6 +303,8 @@ void rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
         qWarning() << "Failed writing in " << filePath;
 
     file.close();
+
+    return true;
 }
 
 void rpdThread::configureSharedMem(const QString &key) {
