@@ -48,7 +48,7 @@ public slots:
     void disconnected();
 
 private:
-    QLocalSocket *signalReceiver = nullptr;
+    QLocalSocket *signalReceiver;
     QLocalServer daemonServer;
     QSharedMemory sharedMem;
     QTimer timer;

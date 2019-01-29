@@ -9,7 +9,9 @@
 #include <QProcess>
 #include <QDataStream>
 
-rpdThread::rpdThread() : QThread() {
+rpdThread::rpdThread() : QThread(),
+    signalReceiver(nullptr)
+{
     qDebug() << "Starting in debug mode";
 
     QLocalServer::removeServer(serverName);
