@@ -30,3 +30,15 @@ SOURCES += main.cpp \
 
 HEADERS += \
     rpdthread.h
+
+DESTDIR= target
+
+bin.path = /usr/bin
+bin.files = target/radeon-profile-daemon
+
+service.path = /etc/systemd/system
+service.files = extra/radeon-profile-daemon.service
+
+INSTALLS += \
+	bin \
+	service
