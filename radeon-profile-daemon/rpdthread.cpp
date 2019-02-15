@@ -14,14 +14,8 @@ rpdThread::rpdThread() : QThread(),
 {
     qDebug() << "Starting in debug mode";
 
-    QLocalServer::removeServer(serverName);
-
-    daemonServer.listen(serverName);
+    createServer();
     connect(&daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
-    QFile::setPermissions("/tmp/"+serverName,QFile("/tmp/"+serverName).permissions() | QFile::WriteOther | QFile::ReadOther);
-
-    qDebug() << "ok";
-
     connect(&timer,SIGNAL(timeout()),this,SLOT(onTimer()));
 }
 
@@ -30,6 +24,16 @@ void rpdThread::newConn() {
     signalReceiver = daemonServer.nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
+
+    // close server, to avoid multiple connections
+    daemonServer.close();
+}
+
+void rpdThread::createServer()
+{
+    QLocalServer::removeServer(serverName);
+    daemonServer.listen(serverName);
+    QFile::setPermissions("/tmp/" + serverName, QFile("/tmp/" + serverName).permissions() | QFile::WriteOther | QFile::ReadOther);
 }
 
 void rpdThread::disconnected() {
@@ -40,6 +44,9 @@ void rpdThread::disconnected() {
         sharedMem.detach();
 
     signalReceiver->deleteLater();
+
+    // create server for new connections
+    createServer();
 }
 
 

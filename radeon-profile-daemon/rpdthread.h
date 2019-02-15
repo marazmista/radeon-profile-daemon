@@ -61,6 +61,7 @@ private:
     bool configure(const QString &filePath);
     void configureSharedMem(const QString &key);
     bool checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size);
+    void createServer();
 };
 
 #endif // RPDTHREAD_H
