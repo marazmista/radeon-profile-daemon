@@ -10,13 +10,17 @@
 #include <QDataStream>
 
 rpdThread::rpdThread() : QThread(),
-    signalReceiver(nullptr)
+    signalReceiver(nullptr),
+    connectionConfirmed(false)
 {
     qDebug() << "Starting in debug mode";
 
     createServer();
     connect(&daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
     connect(&timer,SIGNAL(timeout()),this,SLOT(onTimer()));
+
+    connectionCheckTimer.setInterval(20000);
+    connect(&connectionCheckTimer, SIGNAL(timeout()), this, SLOT(checkConnection()));
 }
 
 void rpdThread::newConn() {
@@ -25,30 +29,72 @@ void rpdThread::newConn() {
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
 
+    connectionConfirmed = true;
+    connectionCheckTimer.start();
+
     // close server, to avoid multiple connections
     daemonServer.close();
 }
 
 void rpdThread::createServer()
 {
+    if (daemonServer.isListening())
+        return;
+
+    qDebug() << "Start listening";
+
     QLocalServer::removeServer(serverName);
     daemonServer.listen(serverName);
     QFile::setPermissions("/tmp/" + serverName, QFile("/tmp/" + serverName).permissions() | QFile::WriteOther | QFile::ReadOther);
 }
 
-void rpdThread::disconnected() {
-    qWarning() << "Disconnecting from the client";
+void rpdThread::closeConnection()
+{
     timer.stop();
 
     if (sharedMem.isAttached())
         sharedMem.detach();
 
+    signalReceiver->close();
     signalReceiver->deleteLater();
+
+    connectionCheckTimer.stop();
+    connectionConfirmed = false;
 
     // create server for new connections
     createServer();
 }
 
+void rpdThread::disconnected() {
+    qWarning() << "Disconnecting from the client";
+
+    closeConnection();
+}
+
+void rpdThread::sendMessage(const QString &msg)
+{
+    QByteArray feedback;
+    QDataStream out(&feedback, QIODevice::WriteOnly);
+
+    out << msg;
+
+    if (signalReceiver != nullptr)
+        signalReceiver->write(feedback);
+}
+
+void rpdThread::checkConnection() {
+    if (!connectionConfirmed) {
+        qDebug() << "Confirmation not received, closing connection";
+
+        closeConnection();
+        return;
+    }
+
+    qDebug() << "Asking connection confirmation...";
+    connectionConfirmed = false;
+
+    sendMessage("7#1#");
+}
 
 void rpdThread::decodeSignal() {
     char signal[256] = {0};
@@ -71,6 +117,7 @@ void rpdThread::onTimer() {
 // 4 - start timer with given interval
 // 5 - stop timer
 // 6 - shared mem key
+// 7 - alive msg
 void rpdThread::performTask(const QString &signal) {
     qDebug() << "Performing task: " << signal;
 
@@ -172,6 +219,18 @@ void rpdThread::performTask(const QString &signal) {
                 configureSharedMem(key);
                 break;
             }
+            case SIGNAL_ALIVE:
+                qDebug() << "ALIVE signal received";
+
+                if (!checkRequiredCommandLength(1, index, size)) {
+                    qCritical() << "Invalid command! (index out of bounds)";
+                    return;
+                }
+
+                if (instructions[++index] == "1")
+                    connectionConfirmed = true;
+
+                break;
             default:
                 qWarning() << "Unknown signal received: " << signal;
                 break;
@@ -179,14 +238,8 @@ void rpdThread::performTask(const QString &signal) {
 
     }
 
-    if (setValueSucces) {
-        QByteArray feedback;
-        QDataStream out(&feedback, QIODevice::WriteOnly);
-
-        out << confirmationMsg;
-
-        signalReceiver->write(feedback);
-    }
+    if (setValueSucces)
+        sendMessage(confirmationMsg);
 
 }
 

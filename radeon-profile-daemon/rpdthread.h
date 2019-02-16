@@ -28,6 +28,7 @@
 #define SIGNAL_TIMER_ON '4'
 #define SIGNAL_TIMER_OFF '5'
 #define SIGNAL_SHAREDMEM_KEY '6'
+#define SIGNAL_ALIVE '7'
 
 
 const QString serverName = "radeon-profile-daemon-server";
@@ -46,13 +47,15 @@ public slots:
     void decodeSignal();
     void onTimer();
     void disconnected();
+    void checkConnection();
 
 private:
     QLocalSocket *signalReceiver;
     QLocalServer daemonServer;
     QSharedMemory sharedMem;
-    QTimer timer;
+    QTimer timer, connectionCheckTimer;
     QString clocksDataPath;
+    bool connectionConfirmed;
 
 
     void readData();
@@ -62,6 +65,8 @@ private:
     void configureSharedMem(const QString &key);
     bool checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size);
     void createServer();
+    void closeConnection();
+    void sendMessage(const QString &msg);
 };
 
 #endif // RPDTHREAD_H
