@@ -54,19 +54,21 @@ private:
     QLocalServer daemonServer;
     QSharedMemory sharedMem;
     QTimer timer, connectionCheckTimer;
-    QString clocksDataPath;
+    QString clocksDataPath, fanControlPath;
     bool connectionConfirmed;
 
 
     void readData();
     bool setNewValue(const QString &filePath, const QString &newValue);
     void performTask(const QString &signal);
-    bool configure(const QString &filePath);
+    bool configure(const QString &type, const QString &filePath);
     void configureSharedMem(const QString &key);
     bool checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size);
     void createServer();
     void closeConnection();
     void sendMessage(const QString &msg);
+    void resetSystemDefaults();
+    bool checkPathValidity(const QString &filePath);
 };
 
 #endif // RPDTHREAD_H

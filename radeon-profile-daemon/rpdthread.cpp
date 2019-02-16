@@ -41,7 +41,7 @@ void rpdThread::createServer()
     if (daemonServer.isListening())
         return;
 
-    qDebug() << "Start listening";
+    qDebug() << "Awaiting connections...";
 
     QLocalServer::removeServer(serverName);
     daemonServer.listen(serverName);
@@ -86,6 +86,7 @@ void rpdThread::checkConnection() {
     if (!connectionConfirmed) {
         qDebug() << "Confirmation not received, closing connection";
 
+        resetSystemDefaults();
         closeConnection();
         return;
     }
@@ -141,19 +142,21 @@ void rpdThread::performTask(const QString &signal) {
         switch (instructions[index][0].toLatin1()) {
 
                 // SIGNAL_CONFIG + SEPARATOR + CLOCKS_PATH + SEPARATOR
-            case SIGNAL_CONFIG:
+            case SIGNAL_CONFIG: {
                 qDebug() << "Elaborating a CONFIG signal";
 
-                if (!checkRequiredCommandLength(1, index, size)) {
+                if (!checkRequiredCommandLength(2, index, size)) {
                     qCritical() << "Invalid command! (index out of bounds)";
                     return;
                 }
 
-                if (!configure(instructions[++index]))
+                QString type = instructions[++index];
+                QString filePath = instructions[++index];
+                if (!configure(type, filePath))
                     qWarning() << "Configuration failed.";
 
+                }
                 break;
-
                 // SIGNAL_READ_CLOCKS + SEPARATOR
             case SIGNAL_READ_CLOCKS:
                 qDebug() << "Elaborating a READ_CLOCKS signal";
@@ -250,37 +253,52 @@ bool rpdThread::checkRequiredCommandLength(unsigned required, unsigned currentIn
     return  true;
 }
 
-bool rpdThread::configure(const QString &filePath) {
-    if (!filePath.startsWith("/sys/kernel/debug/dri/")) {
-        // The file path is not in whitelisted directories
-        // This is a security check to prevent exploiters from reading root files
-        qCritical() << "Illegal clocks data path: " << filePath;
+bool rpdThread::checkPathValidity(const QString &filePath) {
+    // The file path is not in whitelisted directories
+    // This is a security check to prevent exploiters from reading root files
+    if (!filePath.startsWith("/sys/kernel/debug/dri/") && !filePath.startsWith("/sys/class/drm/")) {
+        qCritical() << "Illegal path: " << filePath;
         return false;
     }
 
-    QFileInfo clocksFileInfo(filePath);
-    if (!clocksFileInfo.exists()) {
-        // The indicated clocks file path does not exist
-        qCritical() << "Indicated clocks data path does not exist: " << filePath;
+    return true;
+}
+
+bool rpdThread::configure(const QString &type, const QString &filePath) {
+    if (!checkPathValidity(filePath))
         return false;
+
+    if (type == "pm_info") {
+        QFileInfo clocksFileInfo(filePath);
+        if (!clocksFileInfo.exists()) {
+            // The indicated clocks file path does not exist
+            qCritical() << "Indicated clocks data path does not exist: " << filePath;
+            return false;
+        }
+
+        if (!clocksFileInfo.isFile()) {
+            // The path is a directory, not a file
+            qCritical() << "Indicated clocks data path is not a valid file: " << filePath;
+            return false;
+        }
+
+        qDebug() << "The new clocks data path is " << filePath;
+        clocksDataPath = filePath; // Remember the path for the next readings
+
+        // The clocks data file will be copied in /tmp/
+        // Let's calculate the destination file path
+        QString destination = "/tmp/" + clocksFileInfo.fileName();
+        // Example: /sys/kernel/debug/dri/0/radeon_pm_info -> /tmp/radeon_pm_info
+        qDebug() << clocksDataPath << " will be copied into " << destination;
+
+        system(QString("cp " + clocksDataPath + " " + destination).toStdString().c_str());
+
+    } else if (type == "pwm1_enable") {
+        qDebug() << "Fan control mode file: " << filePath;
+
+        fanControlPath = filePath;
     }
 
-    if (!clocksFileInfo.isFile()) {
-        // The path is a directory, not a file
-        qCritical() << "Indicated clocks data path is not a valid file: " << filePath;
-        return false;
-    }
-
-    qDebug() << "The new clocks data path is " << filePath;
-    clocksDataPath = filePath; // Remember the path for the next readings
-
-    // The clocks data file will be copied in /tmp/
-    // Let's calculate the destination file path
-    QString destination="/tmp/" + clocksFileInfo.fileName();
-    // Example: /sys/kernel/debug/dri/0/radeon_pm_info -> /tmp/radeon_pm_info
-    qDebug() << clocksDataPath << " will be copied into " << destination;
-
-    system(QString("cp " + clocksDataPath + " " + destination).toStdString().c_str());
     return true;
 }
 
@@ -329,7 +347,7 @@ bool rpdThread::setNewValue(const QString &filePath, const QString &newValue) {
         return false;
     }
 
-    if (!filePath.startsWith("/sys/class/drm/")) {
+    if (!checkPathValidity(filePath)) {
         // The file path is not in whitelisted directories
         // This is a security check to prevent exploiters from writing files as root system wide
         qWarning() << "Illegal path to be set: " << filePath;
@@ -379,4 +397,16 @@ void rpdThread::configureSharedMem(const QString &key) {
             qCritical() << "Unable to attach to shared memory:" << sharedMem.errorString();
 
     }
+}
+
+void rpdThread::resetSystemDefaults() {
+    qWarning() << "Restoring system defaults";
+
+    // reset fan control
+    if (!fanControlPath.isEmpty()) {
+        qWarning() << "Setting fan control mode to auto";
+        setNewValue(fanControlPath, "2");
+    }
+
+    // reset other settings...
 }
