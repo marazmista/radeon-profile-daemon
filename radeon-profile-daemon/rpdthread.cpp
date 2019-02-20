@@ -13,6 +13,7 @@ rpdThread::rpdThread() : QThread(),
     signalReceiver(nullptr),
     connectionConfirmed(false)
 {
+    qInfo() << "radeon-profile-daemon (v. " + appVersion + ")";
     qDebug() << "Starting in debug mode";
 
     createServer();
@@ -21,10 +22,11 @@ rpdThread::rpdThread() : QThread(),
 
     connectionCheckTimer.setInterval(20000);
     connect(&connectionCheckTimer, SIGNAL(timeout()), this, SLOT(checkConnection()));
+
 }
 
 void rpdThread::newConn() {
-    qWarning() << "Connecting to the client";
+    qInfo() << "Connecting to the client";
     signalReceiver = daemonServer.nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
@@ -41,7 +43,7 @@ void rpdThread::createServer()
     if (daemonServer.isListening())
         return;
 
-    qDebug() << "Awaiting connections...";
+    qInfo() << "Awaiting connections...";
 
     QLocalServer::removeServer(serverName);
     daemonServer.listen(serverName);
@@ -66,7 +68,7 @@ void rpdThread::closeConnection()
 }
 
 void rpdThread::disconnected() {
-    qWarning() << "Disconnecting from the client";
+    qInfo() << "Client disconnected";
 
     closeConnection();
 }

@@ -30,7 +30,7 @@
 #define SIGNAL_SHAREDMEM_KEY '6'
 #define SIGNAL_ALIVE '7'
 
-
+const QString appVersion = "20190220";
 const QString serverName = "radeon-profile-daemon-server";
 
 class rpdThread : public QThread
