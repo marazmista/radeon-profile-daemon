@@ -141,7 +141,7 @@ void rpdThread::performTask(const QString &signal) {
     for (int index = 0; index < size; index++) {
 
         // Check the first char (instruction type)
-        switch (instructions[index][0].toLatin1()) {
+        switch (instructions.at(index)[0].toLatin1()) {
 
                 // SIGNAL_CONFIG + SEPARATOR + CLOCKS_PATH + SEPARATOR
             case SIGNAL_CONFIG: {
@@ -152,8 +152,9 @@ void rpdThread::performTask(const QString &signal) {
                     return;
                 }
 
-                QString type = instructions[++index];
-                QString filePath = instructions[++index];
+                const auto type = instructions.at(++index),
+                        filePath = instructions.at(++index);
+
                 if (!configure(type, filePath))
                     qWarning() << "Configuration failed.";
 
@@ -174,8 +175,8 @@ void rpdThread::performTask(const QString &signal) {
                     return;
                 }
 
-                const QString value = instructions[++index],
-                        path = instructions[++index];
+                const auto value = instructions.at(++index),
+                        path = instructions.at(++index);
 
                 if (setNewValue(path, value)) {
                         setValueSucces = true;
@@ -194,10 +195,10 @@ void rpdThread::performTask(const QString &signal) {
                     return;
                 }
 
-                int inputMillis = instructions[++index].toInt(); // Seconds integer
+                int inputMillis = instructions.at(++index).toInt(); // Seconds integer
 
                 if (inputMillis < 1) {
-                    qCritical() << "Invalid value TIMER_ON value: " << instructions[index];
+                    qCritical() << "Invalid value TIMER_ONvalue: " << instructions.at(index);
                     break;
                 }
 
@@ -219,7 +220,7 @@ void rpdThread::performTask(const QString &signal) {
                     return;
                 }
 
-                QString key = instructions[++index];
+                const auto key = instructions.at(++index);
                 qDebug() << "Shared memory key: " << key;
                 configureSharedMem(key);
                 break;
@@ -232,7 +233,7 @@ void rpdThread::performTask(const QString &signal) {
                     return;
                 }
 
-                if (instructions[++index] == "1")
+                if (instructions.at(++index) == "1")
                     connectionConfirmed = true;
 
                 break;
