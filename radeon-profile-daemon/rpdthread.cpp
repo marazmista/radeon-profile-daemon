@@ -179,7 +179,7 @@ void rpdThread::performTask(const QString &signal) {
 
                 if (setNewValue(path, value)) {
                         setValueSucces = true;
-                        confirmationMsg.append(value).append("#");
+                        confirmationMsg.append(value).append(SEPARATOR);
                 }
 
                 break;
