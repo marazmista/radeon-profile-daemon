@@ -100,7 +100,7 @@ void rpdThread::checkConnection() {
 }
 
 void rpdThread::decodeSignal() {
-    char signal[256] = {0};
+    char signal[1024] = {0};
 
     signalReceiver->read(signal,signalReceiver->bytesAvailable());
     performTask(QString(signal));
