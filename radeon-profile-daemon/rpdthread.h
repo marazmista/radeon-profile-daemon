@@ -30,7 +30,7 @@
 #define SIGNAL_SHAREDMEM_KEY '6'
 #define SIGNAL_ALIVE '7'
 
-const QString appVersion = "20190301";
+const QString appVersion = "20190309";
 const QString serverName = "radeon-profile-daemon-server";
 
 class rpdThread : public QThread
@@ -44,10 +44,10 @@ signals:
 
 public slots:
     void newConn();
-    void decodeSignal();
     void onTimer();
     void disconnected();
     void checkConnection();
+    void readSignalAndPerformTask();
 
 private:
     QLocalSocket *signalReceiver;
@@ -60,7 +60,6 @@ private:
 
     void readData();
     bool setNewValue(const QString &filePath, const QString &newValue);
-    void performTask(const QString &signal);
     bool configure(const QString &type, const QString &filePath);
     void configureSharedMem(const QString &key);
     bool checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size);

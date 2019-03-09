@@ -28,7 +28,7 @@ rpdThread::rpdThread() : QThread(),
 void rpdThread::newConn() {
     qInfo() << "Connecting to the client";
     signalReceiver = daemonServer.nextPendingConnection();
-    connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(decodeSignal()));
+    connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(readSignalAndPerformTask()));
     connect(signalReceiver,SIGNAL(disconnected()),this,SLOT(disconnected()));
 
     connectionConfirmed = true;
@@ -77,6 +77,7 @@ void rpdThread::sendMessage(const QString &msg)
 {
     QByteArray feedback;
     QDataStream out(&feedback, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_7);
 
     out << msg;
 
@@ -99,13 +100,6 @@ void rpdThread::checkConnection() {
     sendMessage("7#1#");
 }
 
-void rpdThread::decodeSignal() {
-    char signal[1024] = {0};
-
-    signalReceiver->read(signal,signalReceiver->bytesAvailable());
-    performTask(QString(signal));
-}
-
 void rpdThread::onTimer() {
     if (signalReceiver->state() == QLocalSocket::ConnectedState)
         readData();
@@ -121,8 +115,9 @@ void rpdThread::onTimer() {
 // 5 - stop timer
 // 6 - shared mem key
 // 7 - alive msg
-void rpdThread::performTask(const QString &signal) {
-    qDebug() << "Performing task: " << signal;
+void rpdThread::readSignalAndPerformTask() {
+    const auto signal = QString(signalReceiver->readAll());
+    qDebug() << "Received signal: " << signal;
 
     if (signal.isEmpty()) {
         qWarning() << "Received empty signal";
