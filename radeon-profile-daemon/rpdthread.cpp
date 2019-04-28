@@ -17,7 +17,7 @@ rpdThread::rpdThread() : QThread(),
     qDebug() << "Starting in debug mode";
 
     createServer();
-    connect(&daemonServer,SIGNAL(newConnection()),this,SLOT(newConn()));
+    connect(&daemonServer,SIGNAL(newConnection()),this,SLOT(newConnection()));
     connect(&timer,SIGNAL(timeout()),this,SLOT(onTimer()));
 
     connectionCheckTimer.setInterval(20000);
@@ -25,7 +25,7 @@ rpdThread::rpdThread() : QThread(),
 
 }
 
-void rpdThread::newConn() {
+void rpdThread::newConnection() {
     qInfo() << "Connecting to the client";
     signalReceiver = daemonServer.nextPendingConnection();
     connect(signalReceiver,SIGNAL(readyRead()),this,SLOT(readSignalAndPerformTask()));
@@ -245,10 +245,7 @@ void rpdThread::readSignalAndPerformTask() {
 }
 
 bool rpdThread::checkRequiredCommandLength(unsigned required, unsigned currentIndex, unsigned size) {
-    if (size <= currentIndex + required)
-        return false;
-
-    return  true;
+    return !(size <= currentIndex + required);
 }
 
 bool rpdThread::checkPathValidity(const QString &filePath) {

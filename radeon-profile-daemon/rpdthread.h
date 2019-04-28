@@ -43,7 +43,7 @@ public:
 signals:
 
 public slots:
-    void newConn();
+    void newConnection();
     void onTimer();
     void disconnected();
     void checkConnection();
