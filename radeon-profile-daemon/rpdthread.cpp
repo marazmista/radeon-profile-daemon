@@ -124,6 +124,12 @@ void rpdThread::readSignalAndPerformTask() {
         return;
     }
 
+    // every received signal confirms connection
+    if (connectionCheckTimer.isActive()) {
+        connectionConfirmed = true;
+        connectionCheckTimer.start();
+    }
+
     bool setValueSucces = false;
     QString confirmationMsg;
 
@@ -193,7 +199,7 @@ void rpdThread::readSignalAndPerformTask() {
                 int inputMillis = instructions.at(++index).toInt(); // Seconds integer
 
                 if (inputMillis < 1) {
-                    qCritical() << "Invalid value TIMER_ONvalue: " << instructions.at(index);
+                    qCritical() << "Invalid value TIMER_ON value: " << instructions.at(index);
                     break;
                 }
 
@@ -228,8 +234,11 @@ void rpdThread::readSignalAndPerformTask() {
                     return;
                 }
 
-                if (instructions.at(++index) == "1")
+                if (instructions.at(++index) == "0") {
+                    qDebug() << "Connection confirmation is disabled";
                     connectionConfirmed = true;
+                    connectionCheckTimer.stop();
+                }
 
                 break;
             default:
