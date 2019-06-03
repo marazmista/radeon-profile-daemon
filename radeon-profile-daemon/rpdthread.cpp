@@ -45,9 +45,9 @@ void rpdThread::createServer()
 
     qInfo() << "Awaiting connections...";
 
-    QLocalServer::removeServer(serverName);
-    daemonServer.listen(serverName);
-    QFile::setPermissions("/tmp/" + serverName, QFile("/tmp/" + serverName).permissions() | QFile::WriteOther | QFile::ReadOther);
+    QLocalServer::removeServer(serverSocketPath);
+    daemonServer.listen(serverSocketPath);
+    QFile::setPermissions(serverSocketPath, QFile(serverSocketPath).permissions() | QFile::WriteOther | QFile::ReadOther);
 }
 
 void rpdThread::closeConnection()
