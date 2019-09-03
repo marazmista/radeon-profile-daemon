@@ -4,7 +4,15 @@ Supprts opensource xf86-video-ati and  xf86-video-amdgpu drivers.
 
 # Dependencies
 
-1. `qt5-base`
+Arch Linux:
+
+`qt5-base`
+
+Ubuntu Linux:
+
+    sudo apt install --yes \
+        libqt5charts5-dev \
+        qt5-qmake
 
 # Build
 
