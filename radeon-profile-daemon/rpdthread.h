@@ -31,7 +31,7 @@
 #define SIGNAL_ALIVE '7'
 
 const QString appVersion = "20190603";
-const QString serverSocketPath = "/run/radeon-profile-daemon-server";
+const QString serverSocketPath = "/run/radeon-profile-daemon/radeon-profile-daemon-server";
 
 class rpdThread : public QThread
 {
