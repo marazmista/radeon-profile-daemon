@@ -47,7 +47,7 @@ void rpdThread::createServer()
 
     QLocalServer::removeServer(serverSocketPath);
     daemonServer.listen(serverSocketPath);
-    QFile::setPermissions(serverSocketPath, QFile(serverSocketPath).permissions() | QFile::WriteOther | QFile::ReadOther);
+    QFile::setPermissions(serverSocketPath, QFile(serverSocketPath).permissions() | QFile::WriteGroup);
 }
 
 void rpdThread::closeConnection()
